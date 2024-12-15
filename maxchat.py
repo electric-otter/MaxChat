@@ -77,7 +77,7 @@ def save_query_response(query, response, file="chatbot_memory.json"):
 # Streamlit UI
 def main():
     st.title("MaxChat")
-    st.write("The smart bot.")
+    st.write("The smart bot. Check information before you use them")
 
     # Text input for user to ask questions
     user_input = st.text_input("Ask a question:")
