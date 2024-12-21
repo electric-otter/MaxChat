@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
 import json
+import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers, models
+from tensorflow.keras import layers, models, preprocessing, utils
 
 # Define the SearXNG API URL (this could be a public instance or your own)
 SEARXNG_API_URL = "https://searx.bndkt.io/search"  # Replace with your own SearXNG API URL
@@ -30,7 +31,7 @@ def get_searxng_results(query):
     except requests.exceptions.RequestException as e:
         return f"Error fetching search results: {e}"
 
-# Define the chatbot model (Seq2Seq architecture - Encoder-Decoder) without training
+# Define the chatbot model (Seq2Seq architecture - Encoder-Decoder) with training
 def build_chatbot_model(vocab_size, embedding_dim, hidden_units):
     # Encoder
     encoder_input = layers.Input(shape=(None,))
@@ -51,6 +52,30 @@ def build_chatbot_model(vocab_size, embedding_dim, hidden_units):
     model = models.Model([encoder_input, decoder_input], decoder_outputs)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     return model
+
+# Function to preprocess text and create tokenizers
+def preprocess_text(input_texts, target_texts, num_samples=10000):
+    input_texts = input_texts[:num_samples]
+    target_texts = ['\t' + text + '\n' for text in target_texts[:num_samples]]
+
+    tokenizer = preprocessing.text.Tokenizer()
+    tokenizer.fit_on_texts(input_texts + target_texts)
+    input_sequences = tokenizer.texts_to_sequences(input_texts)
+    target_sequences = tokenizer.texts_to_sequences(target_texts)
+
+    max_encoder_seq_length = max([len(seq) for seq in input_sequences])
+    max_decoder_seq_length = max([len(seq) for seq in target_sequences])
+
+    encoder_input_data = preprocessing.sequence.pad_sequences(input_sequences, maxlen=max_encoder_seq_length, padding='post')
+    decoder_input_data = preprocessing.sequence.pad_sequences(target_sequences, maxlen=max_decoder_seq_length, padding='post')
+    decoder_target_data = np.zeros((len(input_texts), max_decoder_seq_length, len(tokenizer.word_index) + 1), dtype='float32')
+
+    for i, seq in enumerate(target_sequences):
+        for t, word_index in enumerate(seq):
+            if t > 0:
+                decoder_target_data[i, t - 1, word_index] = 1.0
+    
+    return tokenizer, encoder_input_data, decoder_input_data, decoder_target_data, max_encoder_seq_length, max_decoder_seq_length
 
 # Function to save new query-response pairs (learning interaction) - optional feature
 def save_query_response(query, response, file="chatbot_memory.json"):
